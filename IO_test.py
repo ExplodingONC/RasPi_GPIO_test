@@ -90,27 +90,27 @@ for x in range(1, 11):
 
 GPIO.output(17, 1)
 # GPIO frame read
-width = int(970)
+width = int(960)
 height = int(720)
 time_start = time.perf_counter_ns()
-extCDLL.read_area_frame.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(8 * width * height,))
-data_stream = extCDLL.read_area_frame(ctypes.c_int(width), ctypes.c_int(height))
+extCDLL.read_area_frame.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(4, height, 2 * (width + 1)))
+data_stream = extCDLL.read_area_frame(ctypes.c_int(width + 1), ctypes.c_int(height))
 time_end = time.perf_counter_ns()
-print("GPIO burst read result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
-print("Total time of %dx%d reads: %fs, aka %5.3fMHz."
-      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * width * height) / (time_end - time_start)))
+print("GPIO burst read result:\r\n{0:b}".format(data_stream[0, 0, 0], data_stream[0, 0, 1]))
+print("Total time of %dx%d pixels and x8 reads: %fs, aka %5.3fMHz."
+      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * (width + 1) * height) / (time_end - time_start)))
 del data_stream
 
 # GPIO frame read (through FIFO)
-width = int(970)
+width = int(960)
 height = int(720)
 time_start = time.perf_counter_ns()
-extCDLL.read_area_frame_fifo.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(8 * width * height,))
-data_stream = extCDLL.read_area_frame_fifo(ctypes.c_int(width), ctypes.c_int(height))
+extCDLL.read_area_frame_fifo.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(4, height, 2 * (width + 1)))
+data_stream = extCDLL.read_area_frame_fifo(ctypes.c_int(width + 1), ctypes.c_int(height))
 time_end = time.perf_counter_ns()
-print("GPIO fifo burst result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
-print("Total time of %dx%d reads: %fs, aka %5.3fMHz."
-      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * width * height) / (time_end - time_start)))
+print("GPIO fifo burst result:\r\n{0:b}".format(data_stream[0, 0, 0], data_stream[0, 0, 1]))
+print("Total time of %dx%d pixels and x8 reads: %fs, aka %5.3fMHz."
+      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * (width + 1) * height) / (time_end - time_start)))
 del data_stream
 
 # GPIO burst read
@@ -146,7 +146,7 @@ for x in range(0, repeat_num):
         data_stream[x] |= GPIO.input(17) << y
         data_stream[x] |= GPIO.input(17) << y
 time_end = time.perf_counter_ns()
-print("GPIO python read result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
+print("RPi.GPIO read result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
 print("Total time of %d reads: %fs, aka %5.3fkHz."
       % (repeat_num, 1e-9 * (time_end - time_start), 1e6 * repeat_num / (time_end - time_start)))
 del data_stream
