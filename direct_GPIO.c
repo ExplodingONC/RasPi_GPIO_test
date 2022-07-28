@@ -38,13 +38,28 @@
 #define GPPUPPDN3 60 /* Pin pull-up/down for pins 57:48 */
 
 // custom pin usage
-#define FV_PIN 0x00000001
-#define LV_PIN 0x00000002
-#define PCLK_PIN 0x00000004
+#define FV_GPIO 24
+#define FV_PIN 0x1 << FV_GPIO
+#define LV_GPIO 23
+#define LV_PIN 0x1 << LV_GPIO
+#define EF_GPIO 10
+#define EF_PIN 0x1 << EF_GPIO
+#define REN_GPIO 23
+#define REN_PIN 0x1 << REN_GPIO
+#define PCLK_GPIO 9
+#define PCLK_PIN 0x1 << PCLK_GPIO
+
+// output parameter
+#define CYCLE_HOLD 5 // cycles held after clock output
 
 // global vars?
 volatile uint32_t *base = 0;
 
+/*
+ * Acquire the register base address from LinuxOS
+ * Input: none
+ * Output: success / fail state
+ */
 int GPIO_reg_setup(void)
 {
     // set up GPIO regs
@@ -77,11 +92,51 @@ int GPIO_reg_setup(void)
     return 0;
 }
 
+/*
+ * Set GPIO pull-none/up/down
+ * Input: gpio - GPIO number
+ *        pull - 0 = none, 1 = up, 2 = down
+ * Output: success
+ */
+int GPIO_set_pull(unsigned int gpio, int pull)
+{
+    uint32_t reg_offset = GPPUPPDN0 + (gpio / 16);
+    uint32_t bit_offset = (gpio % 16) * 2;
+    base[reg_offset] = (base[reg_offset] & ~(3 << bit_offset)) | (pull << bit_offset);
+    return 0;
+}
+
+/*
+ * Set GPIO function select
+ * Input: gpio - GPIO number
+ *        fsel - 0 = FUNC_IP, 1 = FUNC_OP, 2 = FUNC_A5, 3 = FUNC_A4,
+ *               4 = FUNC_A0, 5 = FUNC_A1, 6 = FUNC_A2, 7 = FUNC_A3
+ * Output: success
+ */
+int GPIO_set_fsel(unsigned int gpio, int fsel)
+{
+    // GPFSEL0-5 with 10 sels per reg, 3 bits per sel (bit[29:0] used)
+    uint32_t reg_offset = GPFSEL0 + (gpio / 10);
+    uint32_t bit_offset = (gpio % 10) * 3;
+    base[reg_offset] = (base[reg_offset] & ~(0x7 << bit_offset)) | (fsel << bit_offset);
+    return 0;
+}
+
+/*
+ * Read once from GPIO bank0
+ * Input: none
+ * Output: GPIO bank0
+ */
 int single_read(void)
 {
     return base[GPLEV0];
 }
 
+/*
+ * Read data stream from GPIO bank0 (sync to PCLK)
+ * Input: length - data length
+ * Output: array of GPIO bank0
+ */
 uint32_t *burst_read(int length)
 {
     // read GPIO level reg
@@ -92,16 +147,16 @@ uint32_t *burst_read(int length)
     {
         GPIO_level = base[GPLEV0];
         // detect FV and LV signal
-        if ((GPIO_level & FV_PIN) && (GPIO_level & LV_PIN))
+        if (1 || (GPIO_level & FV_PIN) && (GPIO_level & LV_PIN))
         {
             // detect PCLK signal
-            if (!clock_tick && (GPIO_level & PCLK_PIN))
+            if (!clock_tick && (1 || (GPIO_level & PCLK_PIN)))
             {
                 clock_tick = 1;
                 GPIO_result[i] = GPIO_level;
-                ++i;
+                i++;
             }
-            else if (!(0))
+            else if (1 || !(GPIO_level & PCLK_PIN))
             {
                 clock_tick = 0;
             }
@@ -110,12 +165,18 @@ uint32_t *burst_read(int length)
     return GPIO_result;
 }
 
+/*
+ * Read data stream from GPIO bank0 (sync to PCLK)
+ * Input: width - frame width
+ *        height - frame length
+ * Output: 1D array of GPIO bank0
+ */
 uint32_t *read_area_frame(int width, int height) // include header bytes in "width"
 {
     // read GPIO level reg
     int clock_tick = 0;
     int frame_valid = 0;
-    int total_size = 4 * width * height; // 1 frame contains 4 sub-frames
+    int total_size = 8 * width * height; // 1 frame contains 4 sub-frames, 1 pixel contains 2 sub-pixels
     uint32_t GPIO_level;
     uint32_t *GPIO_result = (uint32_t *)malloc(sizeof(uint32_t) * total_size);
     // if there is a frame already in progress (FV=1), wait till it ends
@@ -128,7 +189,7 @@ uint32_t *read_area_frame(int width, int height) // include header bytes in "wid
     {
         GPIO_level = base[GPLEV0];
         // detect FV signal
-        if ((GPIO_level & FV_PIN))
+        if (1 || (GPIO_level & FV_PIN))
         {
             frame_valid = 1;
         }
@@ -138,24 +199,81 @@ uint32_t *read_area_frame(int width, int height) // include header bytes in "wid
     {
         GPIO_level = base[GPLEV0];
         // detect FV signal
-        if (!(GPIO_level & FV_PIN))
+        if (0 && !(GPIO_level & FV_PIN))
         {
             frame_valid = 0;
             break;
         }
         // detect LV signal
-        if ((GPIO_level & LV_PIN))
+        if (1 || (GPIO_level & LV_PIN))
         {
             // detect PCLK signal
-            if (!clock_tick && (GPIO_level & PCLK_PIN))
+            if (!clock_tick && (1 || (GPIO_level & PCLK_PIN)))
             {
                 clock_tick = 1;
                 GPIO_result[i] = GPIO_level;
                 ++i;
             }
-            else if (!(0))
+            else if (1 || !(GPIO_level & PCLK_PIN))
             {
                 clock_tick = 0;
+            }
+        }
+    }
+    return GPIO_result;
+}
+
+/*
+ * Read data stream from GPIO bank0 (fifo controlled by PCLK output)
+ * Input: width - frame width
+ *        height - frame length
+ * Output: 1D array of GPIO bank0
+ */
+uint32_t *read_area_frame_fifo(int width, int height) // include header bytes in "width"
+{
+    GPIO_set_pull(PCLK_GPIO, 0);
+    // read GPIO level reg
+    int last_word = 1;
+    int total_size = 8 * width * height; // 1 frame contains 4 sub-frames, 1 pixel contains 2 sub-pixels
+    uint32_t GPIO_level;
+    uint32_t *GPIO_result = (uint32_t *)malloc(sizeof(uint32_t) * total_size);
+    // capture fifo output
+    for (int i = 0; i < total_size;)
+    {
+        if (last_word)
+        {
+            // RCLK pulse
+            base[GPSET0] = PCLK_PIN;
+            for (int tick = 0; tick < CYCLE_HOLD; tick++)
+                asm("nop");
+            base[GPCLR0] = PCLK_PIN;
+            // read #EF flag
+            GPIO_level = base[GPLEV0];
+            if (1 || (GPIO_level & EF_PIN))
+            {
+                last_word = 0;
+                // set #REN signal
+                base[GPCLR0] = REN_PIN;
+            }
+        }
+        else
+        {
+            // RCLK pulse
+            base[GPSET0] = PCLK_PIN;
+            for (int tick = 0; tick < CYCLE_HOLD; tick++)
+                asm("nop");
+            base[GPCLR0] = PCLK_PIN;
+            // read data
+            GPIO_level = base[GPLEV0];
+            // data save
+            GPIO_result[i] = GPIO_level;
+            i++;
+            // detect #EF signal
+            if (0 && !(GPIO_level & EF_PIN))
+            {
+                last_word = 1;
+                // clear #REN signal
+                base[GPSET0] = REN_PIN;
             }
         }
     }
