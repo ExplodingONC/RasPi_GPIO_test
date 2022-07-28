@@ -7,7 +7,6 @@ import datetime
 # import project modules
 import ctypes
 import numpy
-import cv2
 # import I/O modules
 import RPi.GPIO as GPIO
 import smbus2
