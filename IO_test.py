@@ -29,7 +29,7 @@ else:
 
 # setup GPIOs
 try:
-    GPIO.setwarnings(False)
+    # GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(17, GPIO.OUT)
@@ -90,15 +90,27 @@ for x in range(1, 11):
 
 GPIO.output(17, 1)
 # GPIO frame read
-width = int(980)
+width = int(970)
 height = int(720)
 time_start = time.perf_counter_ns()
-extCDLL.read_area_frame.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(width * height,))
+extCDLL.read_area_frame.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(8 * width * height,))
 data_stream = extCDLL.read_area_frame(ctypes.c_int(width), ctypes.c_int(height))
 time_end = time.perf_counter_ns()
 print("GPIO burst read result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
 print("Total time of %dx%d reads: %fs, aka %5.3fMHz."
-      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (4 * width * height) / (time_end - time_start)))
+      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * width * height) / (time_end - time_start)))
+del data_stream
+
+# GPIO frame read (through FIFO)
+width = int(970)
+height = int(720)
+time_start = time.perf_counter_ns()
+extCDLL.read_area_frame_fifo.restype = numpy.ctypeslib.ndpointer(dtype=ctypes.c_uint32, shape=(8 * width * height,))
+data_stream = extCDLL.read_area_frame_fifo(ctypes.c_int(width), ctypes.c_int(height))
+time_end = time.perf_counter_ns()
+print("GPIO fifo burst result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
+print("Total time of %dx%d reads: %fs, aka %5.3fMHz."
+      % (width, height, 1e-9 * (time_end - time_start), 1e3 * (8 * width * height) / (time_end - time_start)))
 del data_stream
 
 # GPIO burst read
@@ -131,8 +143,8 @@ data_stream = numpy.zeros(repeat_num, dtype=int, order='C')
 time_start = time.perf_counter_ns()
 for x in range(0, repeat_num):
     for y in range(0, 12):
-        data_stream[x] = GPIO.input(17)
-        data_stream[x] = GPIO.input(17)
+        data_stream[x] |= GPIO.input(17) << y
+        data_stream[x] |= GPIO.input(17) << y
 time_end = time.perf_counter_ns()
 print("GPIO python read result:\r\n{0:b}".format(data_stream[0], data_stream[1]))
 print("Total time of %d reads: %fs, aka %5.3fkHz."
