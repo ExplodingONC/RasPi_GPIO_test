@@ -8,7 +8,6 @@ import datetime
 import ctypes
 import numpy
 import scipy.constants
-import cv2
 # import I/O modules
 import RPi.GPIO as GPIO
 import smbus2
