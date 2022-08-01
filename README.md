@@ -1,5 +1,7 @@
-# RasPi_GPIO_test
+# RasPi_IO_test
 Just a test of RasPi 4B's GPIO speed, nothing special... The goal is reading a 12bit parallel signal with signal clock.
+
+Also tested OpenCV video output capability (with multi-monitor and multi-threading).
 
 The corresponding circuit is https://github.com/ExplodingONC/S15454-01WT_on_RasPi
 
