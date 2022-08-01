@@ -2,11 +2,8 @@
 import os
 import sys
 import time
-from cv2 import waitKey
 import screeninfo
 import threading
-import multiprocessing
-import concurrent.futures
 # import project modules
 import scipy.constants as const
 import scipy.io as sciio
@@ -52,7 +49,7 @@ def back_end_task(stop, img):
 try:
     # MATLAB v7.3+
     cal_file = h5py.File('cal_profile_v73.mat', 'r')
-    cal_lut = cal_file.get('cal_img')
+    cal_lut = cal_file.get('cal_img')  # dimension order is reversed
     cal_lut = numpy.array(cal_lut)
     cal_lut = numpy.moveaxis(cal_lut, [0, 1, 2], [2, 1, 0])
     print("MATLAB 7.3 MAT-file")
