@@ -15,42 +15,47 @@ from skimage import io as imgio
 # thread tasks
 
 
-def front_end_task(ctrl, img):
+def front_end_task(lock, ctrl, img):
     # display HTTP cats
     while True:
-        ctrl_code = ctrl()
+        ctrl_code = ctrl[0]
         if ctrl_code == -1:
             break
         elif ctrl_code == 0:
             time.sleep(0.01)
         elif ctrl_code == 1:
-            http_code = input("Select an HTTP status code: ")
+            with lock:
+                http_code = input("Select an HTTP status code: ")
             if "\x1b" in http_code or "x" in http_code:
-                print("Found escape code, exiting...")
+                with lock:
+                    print("Found escape code, exiting...")
                 break
             try:
                 image = imgio.imread(f"https://http.cat/{http_code}.jpg")  # RGB order
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             except:
-                print(f"{http_code} is probably not an HTTP status code.")
+                with lock:
+                    print(f"{http_code} is probably not an HTTP status code.")
             else:
                 img[0] = image  # BGR order
 
 
-def back_end_task(ctrl, img):
+def back_end_task(lock, ctrl, img):
     # display calibration image
+    GL = 0
     while True:
-        ctrl_code = ctrl()
+        ctrl_code = ctrl[1]
         if ctrl_code == -1:
             break
         elif ctrl_code == 0:
             time.sleep(0.01)
         elif ctrl_code == 1:
-            for GL in range(0, 256):
-                img[1] = cal_lut[:, :, GL]
-                time.sleep(0.1)
-                if ctrl() != 1:
-                    break
+            img[1] = cal_lut[:, :, GL]
+            if GL < 255:
+                GL += 1
+            else:
+                GL = 0
+            time.sleep(0.01)
 
 
 # get calibration LUT
@@ -70,7 +75,7 @@ finally:
     print("Calibration LUT shape:", cal_lut.shape)
 print()
 
-# check operating system
+# check operating system and target the physical display
 if "win" in sys.platform:
     # Windows
     target_DISPLAY_env = "localhost:0.0"
@@ -80,7 +85,7 @@ elif "linux" in sys.platform:
 else:
     print("Unsupported OS version!")
     sys.exit()
-# target the physical display
+# check DISPLAY environment variable
 current_DISPLAY_env = os.getenv("DISPLAY")
 if current_DISPLAY_env != target_DISPLAY_env:
     print(f"Wrong $DISPLAY environment variable: \"{current_DISPLAY_env}\"! Try fixing it...")
@@ -109,10 +114,11 @@ print()
 
 # allocate monitor functions, returns and threads
 frontend_monitor = 0
-backend_monitor = 1
+backend_monitor = 0
 front_end_thread = None
 back_end_thread = None
-thread_conrol = 0
+thread_lock = threading.Lock()
+thread_conrol = [0, 0]  # 0:pause, 1:run, -1:kill
 img = [None, None]  # list for return imgs
 try:
     # front end
@@ -120,9 +126,9 @@ try:
         cv2.namedWindow("Front-end", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         # move to target screen before full screen
         cv2.moveWindow("Front-end", monitors[frontend_monitor].x, monitors[frontend_monitor].y)
-        cv2.setWindowProperty("Front-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        # cv2.setWindowProperty("Front-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # cv2.resizeWindow("Front-end", monitors[frontend_monitor].width, monitors[frontend_monitor].height)
-        front_end_thread = threading.Thread(target=front_end_task, args=(lambda: thread_conrol, img), daemon=True)
+        front_end_thread = threading.Thread(target=front_end_task, args=(thread_lock, thread_conrol, img), daemon=True)
         print("Front end image window ready.")
     else:
         print("Front-end display index is not available!")
@@ -132,9 +138,9 @@ try:
         cv2.namedWindow("Back-end", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         # move to target screen before full screen
         cv2.moveWindow("Back-end", monitors[backend_monitor].x, monitors[backend_monitor].y)
-        cv2.setWindowProperty("Back-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        # cv2.setWindowProperty("Back-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # cv2.resizeWindow("Back-end", monitors[backend_monitor].width, monitors[backend_monitor].height)
-        back_end_thread = threading.Thread(target=back_end_task, args=(lambda: thread_conrol, img), daemon=True)
+        back_end_thread = threading.Thread(target=back_end_task, args=(thread_lock, thread_conrol, img), daemon=True)
         print("Back end image window ready.")
     else:
         print("Back-end display index is not available!")
@@ -147,16 +153,18 @@ else:
 # start threads
 try:
     front_end_thread.start()
-    print("Front end start.")
 except:
     print("Front end not available!")
+else:
+    print("Front end start.")
 try:
     back_end_thread.start()
-    print("Back end start.")
 except:
     print("Back end not available!")
+else:
+    print("Back end start.")
 print()
-thread_conrol = 1
+thread_conrol[:] = [1, 1]
 
 # wait for updates
 while True:
@@ -171,7 +179,7 @@ while True:
         finally:
             img[1] = None
     if not front_end_thread.is_alive():
-        thread_conrol = -1
+        thread_conrol[:] = [-1, -1]
         break
     cv2.waitKey(1)
 
