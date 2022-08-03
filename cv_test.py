@@ -1,5 +1,4 @@
 # import system modules
-import http
 import os
 import sys
 import time
@@ -50,7 +49,7 @@ def back_end_task(ctrl, img):
             for GL in range(0, 256):
                 img[1] = cal_lut[:, :, GL]
                 time.sleep(0.1)
-                if ctrl():
+                if ctrl() != 1:
                     break
 
 
