@@ -14,6 +14,8 @@ from skimage import io as imgio
 
 # thread tasks
 
+# use mutable parameters as thread I/O
+
 
 def front_end_task(lock, ctrl, img):
     # display HTTP cats
@@ -38,6 +40,8 @@ def front_end_task(lock, ctrl, img):
                     print(f"{http_code} is probably not an HTTP status code.")
             else:
                 img[0] = image  # BGR order
+
+# use mutable parameters as thread I/O
 
 
 def back_end_task(lock, ctrl, img):
@@ -83,14 +87,15 @@ elif "linux" in sys.platform:
     # Linux
     target_DISPLAY_env = ":0"
 else:
-    print("Unsupported OS version!")
+    print("Unsupported OS version!")  # aka MacOS which I don't have
     sys.exit()
 # check DISPLAY environment variable
 current_DISPLAY_env = os.getenv("DISPLAY")
 if current_DISPLAY_env != target_DISPLAY_env:
+    # update env var to desired one
     print(f"Wrong $DISPLAY environment variable: \"{current_DISPLAY_env}\"! Try fixing it...")
     os.environ["DISPLAY"] = target_DISPLAY_env
-    # check the env var again
+    # check the env var again in case of failure
     current_DISPLAY_env = os.getenv("DISPLAY")
     if current_DISPLAY_env != target_DISPLAY_env:
         print(f"Fail to set $DISPLAY environment variable! Current $DISPLAY: \"{current_DISPLAY_env}\".")
@@ -98,6 +103,7 @@ if current_DISPLAY_env != target_DISPLAY_env:
     else:
         print(f"Successfully set $DISPLAY environment variable: \"{current_DISPLAY_env}\"!")
 else:
+    # already correct DISPLAY environ
     print(f"$DISPLAY environment variable: \"{current_DISPLAY_env}\". Continue.")
 print()
 
@@ -144,7 +150,7 @@ try:
         print("Back end image window ready.")
     else:
         print("Back-end display index is not available!")
-        # sys.exit()
+        # sys.exit()  # don't exit if backend is not necessary
 except Exception as err:
     print("Error initializing display targets!\r\n", err)
 else:
@@ -164,10 +170,11 @@ except:
 else:
     print("Back end start.")
 print()
-thread_conrol[:] = [1, 1]
+thread_conrol[:] = [1, 1]  # mutate the list instead of assign a new one
 
 # wait for updates
 while True:
+    # UI operations in OpenCV should always be in main thread
     if img[0] is not None:
         try:
             cv2.imshow("Front-end", img[0])
@@ -179,10 +186,11 @@ while True:
         finally:
             img[1] = None
     if not front_end_thread.is_alive():
-        thread_conrol[:] = [-1, -1]
+        thread_conrol[:] = [-1, -1]  # mutate the list instead of assign a new one
         break
     cv2.waitKey(1)
 
+# finish
 try:
     front_end_thread.join()
     back_end_thread.join()
