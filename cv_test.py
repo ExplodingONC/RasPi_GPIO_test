@@ -131,7 +131,7 @@ try:
     if frontend_monitor <= numpy.size(monitors) - 1:
         cv2.namedWindow("Front-end", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         # move to target screen before full screen
-        cv2.moveWindow("Front-end", monitors[frontend_monitor].x, monitors[frontend_monitor].y)
+        cv2.moveWindow("Front-end", monitors[frontend_monitor].x + 1, monitors[frontend_monitor].y + 1)
         # cv2.setWindowProperty("Front-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # cv2.resizeWindow("Front-end", monitors[frontend_monitor].width, monitors[frontend_monitor].height)
         front_end_thread = threading.Thread(target=front_end_task, args=(thread_lock, thread_conrol, img), daemon=True)
@@ -143,7 +143,7 @@ try:
     if backend_monitor <= numpy.size(monitors) - 1:
         cv2.namedWindow("Back-end", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         # move to target screen before full screen
-        cv2.moveWindow("Back-end", monitors[backend_monitor].x, monitors[backend_monitor].y)
+        cv2.moveWindow("Back-end", monitors[backend_monitor].x + 1, monitors[backend_monitor].y + monitors[backend_monitor].height // 2 + 1)
         # cv2.setWindowProperty("Back-end", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # cv2.resizeWindow("Back-end", monitors[backend_monitor].width, monitors[backend_monitor].height)
         back_end_thread = threading.Thread(target=back_end_task, args=(thread_lock, thread_conrol, img), daemon=True)
