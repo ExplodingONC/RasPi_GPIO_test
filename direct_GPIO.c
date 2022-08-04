@@ -1,3 +1,8 @@
+/*
+build with this cmd:
+cc -fPIC -shared -o direct_GPIO.so direct_GPIO.c
+*/
+
 // includes
 #include <stdio.h>
 #include <stdarg.h>
