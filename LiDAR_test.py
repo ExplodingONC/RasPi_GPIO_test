@@ -45,7 +45,7 @@ except Exception as err:
     sys.exit()
 else:
     print("I2C initialized.")
-    
+
 # setup GPIOs
 try:
     # GPIO.setwarnings(False)
@@ -115,7 +115,6 @@ try:
         print(" - I2C data sent.")
     time.sleep(0.25)
 
-
     # GPIO frame read (through FIFO)
     GPIO.output(17, 0)  # disable FIFO reset signal
     time_start = time.perf_counter_ns()
@@ -127,6 +126,7 @@ try:
 
     # LiDAR data processing
     depth_map = numpy.zeros((height, width), dtype=int, order='C')
+    intensity_map = numpy.zeros((height, width), dtype=int, order='C')
     # slicing
     data_F1_Ch1 = data_stream[0, :, 0::2]
     data_F1_Ch2 = data_stream[0, :, 1::2]
@@ -145,15 +145,23 @@ try:
             dif_F4 = data_F4_Ch1[y, x + 1] - data_F4_Ch2[y, x + 1]
             dif_1 = (dif_F1 - dif_F3) // 2
             dif_2 = (dif_F2 - dif_F4) // 2
+            sum_F1 = data_F1_Ch1[y, x + 1] + data_F1_Ch2[y, x + 1]
+            sum_F2 = data_F2_Ch1[y, x + 1] + data_F2_Ch2[y, x + 1]
+            sum_F3 = data_F3_Ch1[y, x + 1] + data_F3_Ch2[y, x + 1]
+            sum_F4 = data_F4_Ch1[y, x + 1] + data_F4_Ch2[y, x + 1]
+            sum_1 = sum_F1 + sum_F3
+            sum_2 = sum_F2 + sum_F4
             if dif_1 >= 0:
                 depth_map[y, x] = (dif_2 / (abs(dif_1) + abs(dif_2)) + 1) / 4 * scipy.constants.c * 4.25e-6
             else:
                 depth_map[y, x] = (-dif_2 / (abs(dif_1) + abs(dif_2)) + 3) / 4 * scipy.constants.c * 4.25e-6
+            intensity_map[y, x] = (sum_1 + sum_2) / 8
             # WIP, lacks calibration process now
     print(depth_map)
+    print(intensity_map)
 
 finally:
-    
+
     # GC
     GPIO.cleanup()
     sys.exit(0)
