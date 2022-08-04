@@ -110,7 +110,7 @@ print()
 # check if display is available
 try:
     monitors = screeninfo.get_monitors()
-    print("Total screen count:", numpy.size(monitors))
+    print("Total screen count:", len(monitors))
     for monitor in monitors:
         print(monitor)
 except:
