@@ -65,16 +65,16 @@ def back_end_task(lock, ctrl, img):
 # get calibration LUT
 try:
     # MATLAB v7.3+
-    cal_file = h5py.File('cal_profile_v73.mat', 'r')
-    cal_lut = cal_file.get('cal_img')  # dimension order is reversed
-    cal_lut = numpy.array(cal_lut)
-    cal_lut = numpy.moveaxis(cal_lut, [0, 1, 2], [2, 1, 0])
+    with h5py.File('cal_profile_v73.mat', 'r') as cal_file:
+        cal_lut = cal_file.get('cal_img')  # dimension order is reversed
+        cal_lut = numpy.array(cal_lut)
+        cal_lut = numpy.moveaxis(cal_lut, [0, 1, 2], [2, 1, 0])
     print("MATLAB 7.3 MAT-file")
 except:
     # MATLAB v7-
-    mat = sciio.loadmat('cal_profile.mat')
-    cal_lut = mat['cal_img']
-    print(mat['__header__'].decode("UTF-8").split(",")[0])
+    with sciio.loadmat('cal_profile.mat') as cal_mat:
+        cal_lut = cal_mat['cal_img']
+    print(cal_mat['__header__'].decode("UTF-8").split(",")[0])
 finally:
     print("Calibration LUT shape:", cal_lut.shape)
 print()
