@@ -86,8 +86,8 @@ try:
     try:
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11100011)  # stop operation
         i2c1.write_byte_data(i2c_address_lidar, 0x07, 0b11000000)  # unknown?
-        i2c1.write_byte_data(i2c_address_lidar, 0x08, 0x00)  # ext_reset
-        i2c1.write_byte_data(i2c_address_lidar, 0x09, 0x40)
+        i2c1.write_byte_data(i2c_address_lidar, 0x08, 0x01)  # ext_reset
+        i2c1.write_byte_data(i2c_address_lidar, 0x09, 0x00)
         i2c1.write_byte_data(i2c_address_lidar, 0x0A, 0x00)  # H_pixel_num
         i2c1.write_byte_data(i2c_address_lidar, 0x0B, 0x60)
         i2c1.write_byte_data(i2c_address_lidar, 0x0C, 0x00)  # V_pixel_num
@@ -115,7 +115,7 @@ try:
         i2c1.write_byte_data(i2c_address_lidar, 0x24, 0b00001111)  # timing signal enable
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11000011)  # start clock divider
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b10000011)  # start clock
-        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b00000011)  # start operation
+        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b00000011)  # start timing gen
         time.sleep(0.01)
     except OSError as err:
         print(" -", "OSError", err)
