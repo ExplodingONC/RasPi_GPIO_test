@@ -14,7 +14,7 @@ import smbus2
 import spidev
 
 # parameters
-width = int(96)  # not include header pixel
+width = int(96)  # not including header pixel
 height = int(72)
 pixel_count = (width + 1) * height
 
@@ -86,7 +86,7 @@ try:
     try:
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11100011)  # stop operation
         i2c1.write_byte_data(i2c_address_lidar, 0x07, 0b11000000)  # unknown?
-        i2c1.write_byte_data(i2c_address_lidar, 0x08, 0x01)  # ext_reset
+        i2c1.write_byte_data(i2c_address_lidar, 0x08, 0x04)  # ext_reset
         i2c1.write_byte_data(i2c_address_lidar, 0x09, 0x00)
         i2c1.write_byte_data(i2c_address_lidar, 0x0A, 0x00)  # H_pixel_num
         i2c1.write_byte_data(i2c_address_lidar, 0x0B, 0x60)
@@ -101,18 +101,18 @@ try:
         i2c1.write_byte_data(i2c_address_lidar, 0x14, 0x80)
         i2c1.write_byte_data(i2c_address_lidar, 0x15, 0x00)
         i2c1.write_byte_data(i2c_address_lidar, 0x16, 0x01)  # Ndata
-        i2c1.write_byte_data(i2c_address_lidar, 0x17, 0x7F)  # VTX1
-        i2c1.write_byte_data(i2c_address_lidar, 0x18, 0x7F)  # VTX2
+        i2c1.write_byte_data(i2c_address_lidar, 0x17, 0x08)  # VTX1
+        i2c1.write_byte_data(i2c_address_lidar, 0x18, 0x08)  # VTX2
         i2c1.write_byte_data(i2c_address_lidar, 0x19, 0x00)  # VTX3
-        i2c1.write_byte_data(i2c_address_lidar, 0x1A, 0x04)
-        i2c1.write_byte_data(i2c_address_lidar, 0x1B, 0x7F)  # light_pulse_width
+        i2c1.write_byte_data(i2c_address_lidar, 0x1A, 0x01)
+        i2c1.write_byte_data(i2c_address_lidar, 0x1B, 0x08)  # light_pulse_width
         i2c1.write_byte_data(i2c_address_lidar, 0x1D, 0x01)  # light_pulse_offset
-        i2c1.write_byte_data(i2c_address_lidar, 0x1F, 0x3F)  # P4_delay
+        i2c1.write_byte_data(i2c_address_lidar, 0x1F, 0x04)  # P4_delay
         i2c1.write_byte_data(i2c_address_lidar, 0x20, 0b00001001)  # L/A, Light_pulse_half_delay, H_pixel_blanking
         i2c1.write_byte_data(i2c_address_lidar, 0x21, 0x00)  # T1 (linear only)
         i2c1.write_byte_data(i2c_address_lidar, 0x22, 0x00)  # PHIS (linear only)
         i2c1.write_byte_data(i2c_address_lidar, 0x23, 0x00)  # T2 (linear only)
-        i2c1.write_byte_data(i2c_address_lidar, 0x24, 0b00001111)  # timing signal enable
+        i2c1.write_byte_data(i2c_address_lidar, 0x24, 0b00001111)  # timing signal enable: light/VTX1/VTX2/VTX3
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11000011)  # start clock divider
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b10000011)  # start clock
         i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b00000011)  # start timing gen
@@ -152,10 +152,10 @@ try:
     # calculating
     for y in range(0, height):
         for x in range(0, width):
-            dif_F1 = data_F1_Ch1[y, x + 1] - data_F1_Ch2[y, x + 1]
-            dif_F2 = data_F2_Ch1[y, x + 1] - data_F2_Ch2[y, x + 1]
-            dif_F3 = data_F3_Ch1[y, x + 1] - data_F3_Ch2[y, x + 1]
-            dif_F4 = data_F4_Ch1[y, x + 1] - data_F4_Ch2[y, x + 1]
+            dif_F1 = data_F1_Ch2[y, x + 1] - data_F1_Ch1[y, x + 1]
+            dif_F2 = data_F2_Ch2[y, x + 1] - data_F2_Ch1[y, x + 1]
+            dif_F3 = data_F3_Ch2[y, x + 1] - data_F3_Ch1[y, x + 1]
+            dif_F4 = data_F4_Ch2[y, x + 1] - data_F4_Ch1[y, x + 1]
             dif_1 = (dif_F1 - dif_F3) // 2
             dif_2 = (dif_F2 - dif_F4) // 2
             sum_F1 = data_F1_Ch1[y, x + 1] + data_F1_Ch2[y, x + 1]
