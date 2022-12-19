@@ -13,6 +13,7 @@ import RPi.GPIO as GPIO
 import smbus2
 import spidev
 
+
 # parameters
 width = int(96)  # not including header pixel
 height = int(72)
@@ -42,7 +43,7 @@ else:
 # setup SPI bus
 try:
     spi_channel = 0
-    spi_device_MCU = 1
+    spi_device_MCU = 0
     spi = spidev.SpiDev()
     spi.open(spi_channel, spi_device_MCU)
 except Exception as err:
@@ -50,18 +51,20 @@ except Exception as err:
     print("SPI initialization failed!")
     sys.exit()
 else:
-    spi.max_speed_hz = 10000000
-    spi.mode = 0
-    print("SPI initialized.")
+    spi.max_speed_hz = 1000000
+    spi.mode = 0b11
+    spi.bits_per_word = 8
+    spi.lsbfirst = False
+    print(f"SPI initialized at {spi.max_speed_hz}Hz.")
 
 # setup GPIOs
 try:
     # GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
-    pin_sensor_rst = 4
-    pin_mcu_rst = 23
-    GPIO.setup(pin_sensor_rst, GPIO.OUT)  # sensor reset (P)
-    GPIO.setup(pin_mcu_rst, GPIO.OUT)  # MCU reset (N)
+    pin_sensor_rst_P = 4
+    pin_mcu_rst_N = 23
+    GPIO.setup(pin_sensor_rst_P, GPIO.OUT)  # sensor reset (P)
+    GPIO.setup(pin_mcu_rst_N, GPIO.OUT)  # MCU reset (N)
 except Exception as err:
     print("Error:", err)
     print("GPIO initialization failed!")
@@ -70,13 +73,48 @@ else:
     print("GPIO initialized.")
 
 # reset devices
-GPIO.output(pin_sensor_rst, 1)
-GPIO.output(pin_mcu_rst, 0)
-time.sleep(0.01)
-GPIO.output(pin_sensor_rst, 0)
-GPIO.output(pin_mcu_rst, 1)
+GPIO.output(pin_sensor_rst_P, 1)
+GPIO.output(pin_mcu_rst_N, 0)
+time.sleep(0.1)
+GPIO.output(pin_sensor_rst_P, 0)
+GPIO.output(pin_mcu_rst_N, 1)
 time.sleep(0.1)
 
+# LiDAR register map
+reg_map = (
+    (0x00, 0b11100011),  # stop operation
+    (0x07, 0b11000000),  # unknown?
+    (0x08, 0x04),  # ext_reset
+    (0x09, 0x00),
+    (0x0A, 0x00),  # H_pixel_num
+    (0x0B, 0x60),
+    (0x0C, 0x00),  # V_pixel_num
+    (0x0D, 0x48),
+    (0x0E, 0x25),  # HST_offset
+    (0x0F, 0b10110111),  # light_pattern
+    (0x10, 0xFF),  # frame blanking
+    (0x11, 0x00),
+    (0x12, 0x08),  # ADC_delay_cfg
+    (0x13, 0b01000000),  # LV_delay, Nlight
+    (0x14, 0x80),
+    (0x15, 0x00),
+    (0x16, 0x01),  # Ndata
+    (0x17, 0x08),  # VTX1
+    (0x18, 0x08),  # VTX2
+    (0x19, 0x00),  # VTX3
+    (0x1A, 0x01),
+    (0x1B, 0x08),  # light_pulse_width
+    (0x1D, 0x01),  # light_pulse_offset
+    (0x1F, 0x04),  # P4_delay
+    (0x20, 0b00001001),  # L/A, Light_pulse_half_delay, H_pixel_blanking
+    (0x21, 0x00),  # T1 (linear only)
+    (0x22, 0x00),  # PHIS (linear only)
+    (0x23, 0x00),  # T2 (linear only)
+    (0x24, 0b00001111),  # timing signal enable: light/VTX1/VTX2/VTX3
+    (0x00, 0b11000011),  # start clock divider
+    (0x00, 0b10000011),  # start clock
+    (0x00, 0b00000011),  # start timing gen
+)
 
 # main program
 print()
@@ -84,38 +122,10 @@ try:
 
     # LiDAR setup through IIC
     try:
-        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11100011)  # stop operation
-        i2c1.write_byte_data(i2c_address_lidar, 0x07, 0b11000000)  # unknown?
-        i2c1.write_byte_data(i2c_address_lidar, 0x08, 0x04)  # ext_reset
-        i2c1.write_byte_data(i2c_address_lidar, 0x09, 0x00)
-        i2c1.write_byte_data(i2c_address_lidar, 0x0A, 0x00)  # H_pixel_num
-        i2c1.write_byte_data(i2c_address_lidar, 0x0B, 0x60)
-        i2c1.write_byte_data(i2c_address_lidar, 0x0C, 0x00)  # V_pixel_num
-        i2c1.write_byte_data(i2c_address_lidar, 0x0D, 0x48)
-        i2c1.write_byte_data(i2c_address_lidar, 0x0E, 0x25)  # HST_offset
-        i2c1.write_byte_data(i2c_address_lidar, 0x0F, 0b10110111)  # light_pattern
-        i2c1.write_byte_data(i2c_address_lidar, 0x10, 0xFF)  # frame blanking
-        i2c1.write_byte_data(i2c_address_lidar, 0x11, 0x00)
-        i2c1.write_byte_data(i2c_address_lidar, 0x12, 0x08)  # ADC_delay_cfg
-        i2c1.write_byte_data(i2c_address_lidar, 0x13, 0b01000000)  # LV_delay, Nlight
-        i2c1.write_byte_data(i2c_address_lidar, 0x14, 0x80)
-        i2c1.write_byte_data(i2c_address_lidar, 0x15, 0x00)
-        i2c1.write_byte_data(i2c_address_lidar, 0x16, 0x01)  # Ndata
-        i2c1.write_byte_data(i2c_address_lidar, 0x17, 0x08)  # VTX1
-        i2c1.write_byte_data(i2c_address_lidar, 0x18, 0x08)  # VTX2
-        i2c1.write_byte_data(i2c_address_lidar, 0x19, 0x00)  # VTX3
-        i2c1.write_byte_data(i2c_address_lidar, 0x1A, 0x01)
-        i2c1.write_byte_data(i2c_address_lidar, 0x1B, 0x08)  # light_pulse_width
-        i2c1.write_byte_data(i2c_address_lidar, 0x1D, 0x01)  # light_pulse_offset
-        i2c1.write_byte_data(i2c_address_lidar, 0x1F, 0x04)  # P4_delay
-        i2c1.write_byte_data(i2c_address_lidar, 0x20, 0b00001001)  # L/A, Light_pulse_half_delay, H_pixel_blanking
-        i2c1.write_byte_data(i2c_address_lidar, 0x21, 0x00)  # T1 (linear only)
-        i2c1.write_byte_data(i2c_address_lidar, 0x22, 0x00)  # PHIS (linear only)
-        i2c1.write_byte_data(i2c_address_lidar, 0x23, 0x00)  # T2 (linear only)
-        i2c1.write_byte_data(i2c_address_lidar, 0x24, 0b00001111)  # timing signal enable: light/VTX1/VTX2/VTX3
-        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b11000011)  # start clock divider
-        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b10000011)  # start clock
-        i2c1.write_byte_data(i2c_address_lidar, 0x00, 0b00000011)  # start timing gen
+        for instruction in reg_map:
+            i2c1.write_byte_data(i2c_address_lidar, instruction[0], instruction[1])
+            if instruction[1] != i2c1.read_byte_data(i2c_address_lidar, instruction[0]):
+                raise Exception(f"Register validation failed! @{instruction}")
         time.sleep(0.01)
     except OSError as err:
         print(" -", "OSError", err)
@@ -131,7 +141,24 @@ try:
     time.sleep(0.25)
 
     while 1:
-        pass
+        time.sleep(2.5)
+        # command MCU to start frame capturing
+        spi.xfer([0x01])
+        # query frame state
+        frame_state = spi.xfer([0x10])
+        while frame_state[0] == 0:
+            time.sleep(0.01)
+            frame_state = spi.xfer([0x10])
+        print("State", frame_state)
+        # data transfering
+        data_stream = numpy.zeros((4, height, 2 * (width + 1)), dtype=numpy.uint16)
+        for sub_frame in range(0, 3):
+            for line in range(0, height - 1):
+                temp = spi.xfer(numpy.zeros(4 * (width + 1), numpy.uint8).tolist())
+                temp = numpy.array(temp, dtype=numpy.uint16)
+                data_stream[sub_frame, line, :] = temp[0::2] << 8 | temp[1::2]
+        print("Data Shape", numpy.shape(data_stream))
+        print("Data", data_stream)
 
     """
     # GPIO frame read (through FIFO)
@@ -173,6 +200,9 @@ try:
     print(depth_map)
     print(intensity_map)
     """
+
+except Exception as err:
+    print("Error:", err)
 
 finally:
     # GC
