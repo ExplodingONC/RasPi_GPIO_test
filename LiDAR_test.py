@@ -79,9 +79,10 @@ time.sleep(0.1)
 GPIO.output(pin_sensor_rst_P, 0)
 GPIO.output(pin_mcu_rst_N, 1)
 time.sleep(0.1)
+print("Devices reset.")
 
 # LiDAR register map
-reg_map = (
+lidar_reg_map = (
     (0x00, 0b11100011),  # stop operation
     (0x07, 0b11000000),  # unknown?
     (0x08, 0x04),  # ext_reset
@@ -98,7 +99,7 @@ reg_map = (
     (0x13, 0b01000000),  # LV_delay, Nlight
     (0x14, 0x80),
     (0x15, 0x00),
-    (0x16, 0x01),  # Ndata
+    (0x16, 0x02),  # Ndata (must be >1, otherwise only reset value is read and VTX won't trigger)
     (0x17, 0x08),  # VTX1
     (0x18, 0x08),  # VTX2
     (0x19, 0x00),  # VTX3
@@ -107,9 +108,9 @@ reg_map = (
     (0x1D, 0x01),  # light_pulse_offset
     (0x1F, 0x04),  # P4_delay
     (0x20, 0b00001001),  # L/A, Light_pulse_half_delay, H_pixel_blanking
-    (0x21, 0x00),  # T1 (linear only)
-    (0x22, 0x00),  # PHIS (linear only)
-    (0x23, 0x00),  # T2 (linear only)
+    # (0x21, 0x00),  # T1 (linear only)
+    # (0x22, 0x00),  # PHIS (linear only)
+    # (0x23, 0x00),  # T2 (linear only)
     (0x24, 0b00001111),  # timing signal enable: light/VTX1/VTX2/VTX3
     (0x00, 0b11000011),  # start clock divider
     (0x00, 0b10000011),  # start clock
@@ -122,7 +123,8 @@ try:
 
     # LiDAR setup through IIC
     try:
-        for instruction in reg_map:
+        # write regs and check step-by-step
+        for instruction in lidar_reg_map:
             i2c1.write_byte_data(i2c_address_lidar, instruction[0], instruction[1])
             if instruction[1] != i2c1.read_byte_data(i2c_address_lidar, instruction[0]):
                 raise Exception(f"Register validation failed! @{instruction}")
@@ -141,7 +143,8 @@ try:
     time.sleep(0.25)
 
     while 1:
-        time.sleep(2.5)
+        time.sleep(1)
+        print(" - Trigger frame capture and SPI read.")
         # command MCU to start frame capturing
         spi.xfer([0x01])
         # query frame state
@@ -152,14 +155,16 @@ try:
         print("State", frame_state)
         # data transfering
         data_stream = numpy.zeros((4, height, 2 * (width + 1)), dtype=numpy.uint16)
-        for sub_frame in range(0, 3):
-            for line in range(0, height - 1):
+        for sub_frame in range(0, 4):
+            for line in range(0, height):
+                time.sleep(0.01)
                 temp = spi.xfer(numpy.zeros(4 * (width + 1), numpy.uint8).tolist())
                 temp = numpy.array(temp, dtype=numpy.uint16)
                 data_stream[sub_frame, line, :] = temp[0::2] << 8 | temp[1::2]
         print("Data Shape", numpy.shape(data_stream))
         print("Data", data_stream)
-
+        
+        time.sleep(4)
     """
     # GPIO frame read (through FIFO)
     data_stream = 0
