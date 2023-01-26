@@ -11,6 +11,7 @@ import scipy.constants
 # import I/O modules
 import RPi.GPIO as GPIO
 import smbus2
+import spidev
 
 
 # parameters
@@ -40,6 +41,23 @@ except Exception as err:
 else:
     print("I2C initialized.")
 
+# setup SPI bus
+try:
+    spi_channel = 0
+    spi_device_MCU = 0
+    spi = spidev.SpiDev()
+    spi.open(spi_channel, spi_device_MCU)
+except Exception as err:
+    print("Error:", err)
+    print("SPI initialization failed!")
+    sys.exit()
+else:
+    spi.max_speed_hz = 1000000
+    spi.mode = 0b11
+    spi.bits_per_word = 8
+    spi.lsbfirst = False
+    print(f"SPI initialized at {spi.max_speed_hz}Hz.")
+
 # setup GPIOs
 try:
     # GPIO.setwarnings(False)
@@ -58,8 +76,10 @@ else:
 # reset devices
 time.sleep(0.1)
 GPIO.output(pin_sensor_rst_P, 1)
+# GPIO.output(pin_mcu_rst_N, 0)
 time.sleep(0.1)
 GPIO.output(pin_sensor_rst_P, 0)
+# GPIO.output(pin_mcu_rst_N, 1)
 time.sleep(0.1)
 print("Devices reset.")
 
@@ -124,15 +144,78 @@ try:
         print(" - I2C data sent.")
     time.sleep(0.25)
 
+    # main loop for LiDAR capturing
     while 1:
-        # just let it free running
-        pass
-    
+        # hold a little bit befroe we start
+        time.sleep(1)
+        print(" - Trigger frame capture and SPI read.")
+        # command MCU to start frame capturing
+        spi.xfer([0x01])
+        # query frame state
+        frame_state = spi.xfer([0x10])
+        while frame_state[0] == 0:
+            time.sleep(0.01)
+            frame_state = spi.xfer([0x10])
+        print("State", frame_state)
+        # data transfering
+        data_stream = numpy.zeros((Ndata, height, 2 * (width + 1)), dtype=numpy.uint16)
+        for sub_frame in range(0, Ndata):
+            for line in range(0, height):
+                time.sleep(0.01)
+                temp = spi.xfer(numpy.zeros(4 * (width + 1), numpy.uint8).tolist())
+                temp = numpy.array(temp, dtype=numpy.uint16)
+                data_stream[sub_frame, line, :] = (temp[0::2] & 0x0f) << 8 | temp[1::2]
+        print("Data Shape", numpy.shape(data_stream))
+        print("Data", data_stream)
+        # pause a bit
+        time.sleep(4)
+    """
+    # GPIO frame read (through FIFO)
+    data_stream = 0
+
+    # LiDAR data processing
+    depth_map = numpy.zeros((height, width), dtype=int, order='C')
+    intensity_map = numpy.zeros((height, width), dtype=int, order='C')
+    # slicing
+    data_F1_Ch1 = data_stream[0, :, 0::2]
+    data_F1_Ch2 = data_stream[0, :, 1::2]
+    data_F2_Ch1 = data_stream[1, :, 0::2]
+    data_F2_Ch2 = data_stream[1, :, 1::2]
+    data_F3_Ch1 = data_stream[2, :, 0::2]
+    data_F3_Ch2 = data_stream[2, :, 1::2]
+    data_F4_Ch1 = data_stream[3, :, 0::2]
+    data_F4_Ch2 = data_stream[3, :, 1::2]
+    # calculating
+    for y in range(0, height):
+        for x in range(0, width):
+            dif_F1 = data_F1_Ch2[y, x + 1] - data_F1_Ch1[y, x + 1]
+            dif_F2 = data_F2_Ch2[y, x + 1] - data_F2_Ch1[y, x + 1]
+            dif_F3 = data_F3_Ch2[y, x + 1] - data_F3_Ch1[y, x + 1]
+            dif_F4 = data_F4_Ch2[y, x + 1] - data_F4_Ch1[y, x + 1]
+            dif_1 = (dif_F1 - dif_F3) // 2
+            dif_2 = (dif_F2 - dif_F4) // 2
+            sum_F1 = data_F1_Ch1[y, x + 1] + data_F1_Ch2[y, x + 1]
+            sum_F2 = data_F2_Ch1[y, x + 1] + data_F2_Ch2[y, x + 1]
+            sum_F3 = data_F3_Ch1[y, x + 1] + data_F3_Ch2[y, x + 1]
+            sum_F4 = data_F4_Ch1[y, x + 1] + data_F4_Ch2[y, x + 1]
+            sum_1 = sum_F1 + sum_F3
+            sum_2 = sum_F2 + sum_F4
+            if dif_1 >= 0:
+                depth_map[y, x] = (dif_2 / (abs(dif_1) + abs(dif_2)) + 1) / 4 * scipy.constants.c * 4.25e-6
+            else:
+                depth_map[y, x] = (-dif_2 / (abs(dif_1) + abs(dif_2)) + 3) / 4 * scipy.constants.c * 4.25e-6
+            intensity_map[y, x] = (sum_1 + sum_2) / 8
+            # WIP, lacks calibration process now
+    print(depth_map)
+    print(intensity_map)
+    """
+
 except Exception as err:
     print("Error:", err)
 
 finally:
     # GC
     GPIO.cleanup()
+    spi.close()
     print("\n - GPIO clean up.")
     sys.exit(0)
