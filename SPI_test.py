@@ -3,73 +3,39 @@
 # Pi Wedge breakout board and a SparkFun Serial 7 Segment display:
 # https://www.sparkfun.com/products/11629
 
+import sys
 import time
 import spidev
 
-# We only have SPI bus 0 available to us on the Pi
-bus = 0
+# setup SPI bus
+try:
+    spi_channel = 0
+    spi_device_MCU = 0
+    spi = spidev.SpiDev()
+    spi.open(spi_channel, spi_device_MCU)
+except Exception as err:
+    print("Error:", err)
+    print("SPI initialization failed!")
+    sys.exit()
+else:
+    spi.max_speed_hz = 1000000
+    spi.mode = 0b11
+    spi.bits_per_word = 8
+    spi.lsbfirst = False
+    print(f"SPI initialized at {spi.max_speed_hz}Hz.")
 
-# Device is the chip select pin. Set to 0 or 1, depending on the connections
-device = 1
-
-# Enable SPI
-spi = spidev.SpiDev()
-
-# Open a connection to a specific bus and device (chip select pin)
-spi.open(bus, device)
-print("SPI open!")
-
-# Set SPI speed and mode
-spi.max_speed_hz = 10000000
-spi.mode = 0
-
-# Clear display
-msg = [0x76]
-spi.xfer2(msg)
-print("SPI transfer 0!")
-
-time.sleep(0.5)
-
-# Turn on one segment of each character to show that we can
-# address all of the segments
-i = 1
-while i < 0x7f:
-
-    # The decimals, colon and apostrophe dots
-    msg = [0x77]
-    msg.append(i)
-    result = spi.xfer2(msg)
-
-    # The first character
-    msg = [0x7b]
-    msg.append(i)
-    result = spi.xfer2(msg)
-
-    # The second character
-    msg = [0x7c]
-    msg.append(i)
-    result = spi.xfer2(msg)
-
-    # The third character
-    msg = [0x7d]
-    msg.append(i)
-    result = spi.xfer2(msg)
-
-    # The last character
-    msg = [0x7e]
-    msg.append(i)
-    result = spi.xfer2(msg)
-
-    print(f"SPI transfer {i}!")
-
-    # Increment to next segment in each character
-    i <<= 1
-
-    # Pause so we can see them
+try:
     time.sleep(0.5)
+    while 1:
+        ret = spi.xfer([0x01])
+        print(ret)
+        time.sleep(0.1)
 
+except Exception as err:
+    print("Error:", err)
 
-# Clear display again
-msg = [0x76]
-spi.xfer2(msg)
-print("SPI transfer done!")
+finally:
+    # GC
+    spi.close()
+    print("\n - Clean up.")
+    sys.exit(0)
