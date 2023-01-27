@@ -4,10 +4,13 @@ import os
 import sys
 import time
 import datetime
+import screeninfo
+import threading
 # import project modules
 import ctypes
 import numpy
 import scipy.constants
+import cv2
 # import I/O modules
 import RPi.GPIO as GPIO
 import smbus2
@@ -73,6 +76,44 @@ except Exception as err:
 else:
     print("GPIO initialized.")
 
+# check operating system and target the physical display
+if "win" in sys.platform:
+    # Windows
+    target_DISPLAY_env = "localhost:0.0"
+elif "linux" in sys.platform:
+    # Linux
+    target_DISPLAY_env = ":0"
+else:
+    print("Unsupported OS version!")  # aka MacOS which I don't have
+    sys.exit()
+# check DISPLAY environment variable
+current_DISPLAY_env = os.getenv("DISPLAY")
+if current_DISPLAY_env != target_DISPLAY_env:
+    # update env var to desired one
+    print(f"Wrong $DISPLAY environment variable: \"{current_DISPLAY_env}\"! Try fixing it...")
+    os.environ["DISPLAY"] = target_DISPLAY_env
+    # check the env var again in case of failure
+    current_DISPLAY_env = os.getenv("DISPLAY")
+    if current_DISPLAY_env != target_DISPLAY_env:
+        print(f"Fail to set $DISPLAY environment variable! Current $DISPLAY: \"{current_DISPLAY_env}\".")
+        sys.exit()
+    else:
+        print(f"Successfully set $DISPLAY environment variable: \"{current_DISPLAY_env}\"!")
+else:
+    # already correct DISPLAY environ
+    print(f"$DISPLAY environment variable: \"{current_DISPLAY_env}\". Continue.")
+
+# check if display is available
+try:
+    monitors = screeninfo.get_monitors()
+    print("Total screen count:", len(monitors))
+    for monitor in monitors:
+        print(monitor)
+except:
+    print("No display is attached!")
+    sys.exit()
+print()
+
 # reset devices
 time.sleep(0.1)
 GPIO.output(pin_sensor_rst_P, 1)
@@ -123,7 +164,7 @@ lidar_reg_map = (
 print()
 try:
 
-    # LiDAR setup through IIC
+    # LiDAR setup through I2C
     try:
         # write regs and check step-by-step
         for instruction in lidar_reg_map:
@@ -145,6 +186,12 @@ try:
     print()
     time.sleep(0.25)
 
+    # display window setup
+    cv2.namedWindow("Intensity", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    # move to target screen before full screen
+    cv2.moveWindow("Intensity", monitors[0].x + 1, monitors[0].y + 1)
+    cv2.setWindowProperty("Intensity", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
     # main loop for LiDAR capturing
     while 1:
 
@@ -156,13 +203,21 @@ try:
             # progress info
             print(f" - Trigger subframe F{subframe} capture and SPI read.")
             # command MCU to start frame capturing
+            time.sleep(0.01)
             spi.writebytes([0x00 | subframe])
             # query frame state
+            timeout_counter = 0
             while True:
                 frame_state = spi.readbytes(1)
                 if frame_state[0] == (0x10 | subframe):
                     break
                 else:
+                    timeout_counter += 1
+                    # re-trigger if there is a timeout (SPI command lost)
+                    if (timeout_counter > 250):
+                        timeout_counter = 0
+                        spi.writebytes([0x00 | subframe])
+                        print(f" - Re-trigger subframe F{subframe} capture.")
                     time.sleep(0.01)
             # data transfering
             data_stream = numpy.zeros((Ndata, height, 2 * (width + 1)), dtype=numpy.int16)
@@ -180,8 +235,11 @@ try:
         # make sure of no negative values
         data = numpy.maximum(data, 0)
         # calculate avg intensity
-        intensity = numpy.sum(data, axis=(0,1)) // 8
+        intensity = numpy.sum(data, axis=(0, 1)) // 8
         print(intensity)
+        disp_intensity = numpy.array(intensity // 8, dtype=numpy.uint8)
+        cv2.imshow("Intensity", disp_intensity)
+        cv2.waitKey(1)
         # pause a bit
         print()
         time.sleep(5)
