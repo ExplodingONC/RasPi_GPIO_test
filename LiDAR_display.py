@@ -146,7 +146,7 @@ lidar_reg_map = (
     (0x17, 0x08),  # VTX1
     (0x18, 0x08),  # VTX2
     (0x19, 0x00),  # VTX3
-    (0x1A, 0x01),
+    (0x1A, 0x1C),
     (0x1B, 0x08),  # light_pulse_width
     (0x1D, 0x01),  # light_pulse_offset
     (0x1F, 0x04),  # P4_delay
@@ -203,13 +203,14 @@ try:
             # progress info
             print(f" - Trigger subframe F{subframe} capture and SPI read.")
             # command MCU to start frame capturing
-            time.sleep(0.01)
+            time.sleep(0.01) # wait for MCU to flush FIFO
             spi.writebytes([0x00 | subframe])
             # query frame state
             timeout_counter = 0
             while True:
                 frame_state = spi.readbytes(1)
                 if frame_state[0] == (0x10 | subframe):
+                    time.sleep(0.01) # wait for MCU to flush FIFO
                     break
                 else:
                     timeout_counter += 1
@@ -242,7 +243,7 @@ try:
         cv2.waitKey(1)
         # pause a bit
         print()
-        time.sleep(5)
+        #time.sleep(5)
     # end of while 1
 
 except Exception as err:
