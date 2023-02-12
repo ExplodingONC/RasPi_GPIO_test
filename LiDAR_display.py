@@ -16,8 +16,6 @@ import cv2
 import RPi.GPIO as GPIO
 import smbus2
 import spidev
-# custom defined
-import IO_init
 
 
 # parameters
