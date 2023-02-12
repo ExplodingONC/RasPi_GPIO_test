@@ -28,16 +28,6 @@ pixel_count = (width + 1) * height
 date = datetime.datetime.now().astimezone()
 print(date.strftime("%Y-%m-%d %H:%M:%S.%f %Z %z"))
 
-
-# i2c_address_lidar = 0x2A
-# i2c = IO_init.initI2C()
-
-# spi = IO_init.initSPI()
-
-# pin_sensor_rst_P = 4
-# pin_mcu_rst_N = 23
-# GPIO = IO_init.initGPIO()
-
 # setup IIC bus
 try:
     i2c_channel = 1
