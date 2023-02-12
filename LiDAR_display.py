@@ -27,6 +27,54 @@ pixel_count = (width + 1) * height
 # timestamp
 date = datetime.datetime.now().astimezone()
 print(date.strftime("%Y-%m-%d %H:%M:%S.%f %Z %z"))
+print()
+
+# check default display count
+default_DISPLAY_env = os.getenv("DISPLAY")
+try:
+    default_monitor_cnt = len(screeninfo.get_monitors())
+except:
+    default_monitor_cnt = 0
+
+# check operating system and physical display
+if "win" in sys.platform:
+    # Windows
+    physical_DISPLAY_env = "localhost:0.0"
+elif "linux" in sys.platform:
+    # Linux
+    physical_DISPLAY_env = ":0"
+else:
+    print("Unsupported OS version!")  # aka MacOS which I don't have
+    sys.exit()
+os.environ["DISPLAY"] = physical_DISPLAY_env
+try:
+    physical_monitor_cnt = len(screeninfo.get_monitors())
+except:
+    physical_monitor_cnt = 0
+
+# decide DISPLAY environment variable
+print(f"{default_monitor_cnt} default monitors, {physical_monitor_cnt} physical monitors.")
+if physical_monitor_cnt > 0:
+    print(f"Physical monitors available! Using physical displays.")
+    os.environ["DISPLAY"] = physical_DISPLAY_env
+else:
+    os.environ["DISPLAY"] = default_DISPLAY_env
+    if default_monitor_cnt > 0:
+        print(f"No physical monitors! Using default settings.")
+    else:
+        print(f"No monitors attached! Nowhere to display. Exiting...")
+        sys.exit()
+
+# double check if display is available and acquire final infos
+try:
+    monitors = screeninfo.get_monitors()
+    print("Total screen count:", len(monitors))
+    for monitor in monitors:
+        print(monitor)
+except:
+    print("No display is attached!")
+    sys.exit()
+print()
 
 # setup IIC bus
 try:
@@ -89,44 +137,6 @@ except Exception as err:
     print("Load binary failed!")
 else:
     print("MCU binary loaded.")
-
-# check operating system and target the physical display
-if "win" in sys.platform:
-    # Windows
-    target_DISPLAY_env = "localhost:0.0"
-elif "linux" in sys.platform:
-    # Linux
-    target_DISPLAY_env = ":0"
-else:
-    print("Unsupported OS version!")  # aka MacOS which I don't have
-    sys.exit()
-# check DISPLAY environment variable
-current_DISPLAY_env = os.getenv("DISPLAY")
-if current_DISPLAY_env != target_DISPLAY_env:
-    # update env var to desired one
-    print(f"Wrong $DISPLAY environment variable: \"{current_DISPLAY_env}\"! Try fixing it...")
-    os.environ["DISPLAY"] = target_DISPLAY_env
-    # check the env var again in case of failure
-    current_DISPLAY_env = os.getenv("DISPLAY")
-    if current_DISPLAY_env != target_DISPLAY_env:
-        print(f"Fail to set $DISPLAY environment variable! Current $DISPLAY: \"{current_DISPLAY_env}\".")
-        sys.exit()
-    else:
-        print(f"Successfully set $DISPLAY environment variable: \"{current_DISPLAY_env}\"!")
-else:
-    # already correct DISPLAY environ
-    print(f"$DISPLAY environment variable: \"{current_DISPLAY_env}\". Continue.")
-
-# check if display is available
-try:
-    monitors = screeninfo.get_monitors()
-    print("Total screen count:", len(monitors))
-    for monitor in monitors:
-        print(monitor)
-except:
-    print("No display is attached!")
-    sys.exit()
-print()
 
 # reset devices
 time.sleep(0.1)
@@ -268,4 +278,5 @@ finally:
     GPIO.cleanup()
     spi.close()
     print("\n - GPIO clean up.")
+    os.environ["DISPLAY"] = default_DISPLAY_env
     sys.exit(0)
