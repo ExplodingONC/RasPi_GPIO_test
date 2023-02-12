@@ -2,6 +2,7 @@
 import errno
 import os
 import sys
+import subprocess
 import time
 import datetime
 # import project modules
@@ -64,14 +65,27 @@ try:
     GPIO.setmode(GPIO.BCM)
     pin_sensor_rst_P = 4
     pin_mcu_rst_N = 23
-    GPIO.setup(pin_sensor_rst_P, GPIO.OUT)  # sensor reset (P)
-    GPIO.setup(pin_mcu_rst_N, GPIO.OUT)  # MCU reset (N)
+    GPIO.setup(pin_sensor_rst_P, GPIO.OUT, initial=0)  # sensor reset (P)
+    # GPIO.setup(pin_mcu_rst_N, GPIO.OUT, initial=1)  # MCU reset (N)
 except Exception as err:
     print("Error:", err)
     print("GPIO initialization failed!")
     sys.exit()
 else:
     print("GPIO initialized.")
+
+# load MCU binary
+try:
+    load_cmd = ["openocd",
+                "-f", "interface/raspberrypi-swd.cfg",
+                "-f", "target/rp2040.cfg",
+                "-c", "program dvp2spi_lnk.elf verify reset exit"]
+    subprocess.run(load_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+except Exception as err:
+    print("Error:", err)
+    print("Load binary failed!")
+else:
+    print("MCU binary loaded.")
 
 # reset devices
 time.sleep(0.1)
@@ -156,13 +170,22 @@ try:
             # progress info
             print(f" - Trigger subframe F{subframe} capture and SPI read.")
             # command MCU to start frame capturing
+            time.sleep(0.01) # wait for MCU to flush FIFO
             spi.writebytes([0x00 | subframe])
             # query frame state
+            timeout_counter = 0
             while True:
                 frame_state = spi.readbytes(1)
                 if frame_state[0] == (0x10 | subframe):
+                    time.sleep(0.01) # wait for MCU to flush FIFO
                     break
                 else:
+                    timeout_counter += 1
+                    # re-trigger if there is a timeout (SPI command lost)
+                    if (timeout_counter > 250):
+                        timeout_counter = 0
+                        spi.writebytes([0x00 | subframe])
+                        print(f" - Re-trigger subframe F{subframe} capture.")
                     time.sleep(0.01)
             # data transfering
             data_stream = numpy.zeros((Ndata, height, 2 * (width + 1)), dtype=numpy.int16)
@@ -184,7 +207,7 @@ try:
         print(intensity)
         # pause a bit
         print()
-        time.sleep(5)
+        time.sleep(1)
     # end of while 1
 
 except Exception as err:

@@ -2,6 +2,7 @@
 import errno
 import os
 import sys
+import subprocess
 import time
 import datetime
 import screeninfo
@@ -15,6 +16,8 @@ import cv2
 import RPi.GPIO as GPIO
 import smbus2
 import spidev
+# custom defined
+import IO_init
 
 
 # parameters
@@ -26,6 +29,16 @@ pixel_count = (width + 1) * height
 # timestamp
 date = datetime.datetime.now().astimezone()
 print(date.strftime("%Y-%m-%d %H:%M:%S.%f %Z %z"))
+
+
+# i2c_address_lidar = 0x2A
+# i2c = IO_init.initI2C()
+
+# spi = IO_init.initSPI()
+
+# pin_sensor_rst_P = 4
+# pin_mcu_rst_N = 23
+# GPIO = IO_init.initGPIO()
 
 # setup IIC bus
 try:
@@ -67,14 +80,27 @@ try:
     GPIO.setmode(GPIO.BCM)
     pin_sensor_rst_P = 4
     pin_mcu_rst_N = 23
-    GPIO.setup(pin_sensor_rst_P, GPIO.OUT)  # sensor reset (P)
-    GPIO.setup(pin_mcu_rst_N, GPIO.OUT)  # MCU reset (N)
+    GPIO.setup(pin_sensor_rst_P, GPIO.OUT, initial=0)  # sensor reset (P)
+    # GPIO.setup(pin_mcu_rst_N, GPIO.OUT, initial=1)  # MCU reset (N)
 except Exception as err:
     print("Error:", err)
     print("GPIO initialization failed!")
     sys.exit()
 else:
     print("GPIO initialized.")
+
+# load MCU binary
+try:
+    load_cmd = ["openocd",
+                "-f", "interface/raspberrypi-swd.cfg",
+                "-f", "target/rp2040.cfg",
+                "-c", "program dvp2spi_lnk.elf verify reset exit"]
+    subprocess.run(load_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+except Exception as err:
+    print("Error:", err)
+    print("Load binary failed!")
+else:
+    print("MCU binary loaded.")
 
 # check operating system and target the physical display
 if "win" in sys.platform:
@@ -146,7 +172,7 @@ lidar_reg_map = (
     (0x17, 0x08),  # VTX1
     (0x18, 0x08),  # VTX2
     (0x19, 0x00),  # VTX3
-    (0x1A, 0x01),
+    (0x1A, 0x1C),
     (0x1B, 0x08),  # light_pulse_width
     (0x1D, 0x01),  # light_pulse_offset
     (0x1F, 0x04),  # P4_delay
@@ -203,13 +229,14 @@ try:
             # progress info
             print(f" - Trigger subframe F{subframe} capture and SPI read.")
             # command MCU to start frame capturing
-            time.sleep(0.01)
+            time.sleep(0.01) # wait for MCU to flush FIFO
             spi.writebytes([0x00 | subframe])
             # query frame state
             timeout_counter = 0
             while True:
                 frame_state = spi.readbytes(1)
                 if frame_state[0] == (0x10 | subframe):
+                    time.sleep(0.01) # wait for MCU to flush FIFO
                     break
                 else:
                     timeout_counter += 1
@@ -242,7 +269,7 @@ try:
         cv2.waitKey(1)
         # pause a bit
         print()
-        time.sleep(5)
+        #time.sleep(1)
     # end of while 1
 
 except Exception as err:
